@@ -22,14 +22,14 @@
   </div>
   <h2>政党の部</h2>
   <div id="parties" class="row">
-    <% parties.sort { |a, b| b[1] <=> a[1] }.each_with_index do |parties, i| %>
+    <% parties.each_with_index do |party, i| %>
       <div class="col-md-3">
         <div class="panel panel-default">
           <div class="panel-heading">
-            <p><%= "#{i + 1}." %> <a href="/political_parties/<%= parties[0] %>"><%= parties[0] %></a></p>
+            <p><%= "#{i + 1}." %> <a href="/political_parties/<%= party[:political_party] %>"><%= party[:political_party] %></a></p>
           </div>
           <div class="panel-body">
-            <p>得票数: <%= parties[1] || 0 %></p>
+            <p>得票数: <%= party[:vote_count] || 0 %></p>
           </div>
         </div>
       </div>
@@ -43,7 +43,7 @@
           <p>男性</p>
         </div>
         <div class="panel-body">
-          <p>得票数: <%= sex_ratio['男'.to_sym] %></p>
+          <p>得票数: <%= sex_ratio[:man] %></p>
         </div>
       </div>
     </div>
@@ -53,7 +53,7 @@
           <p>女性</p>
         </div>
         <div class="panel-body">
-          <p>得票数: <%= sex_ratio['女'.to_sym] %></p>
+          <p>得票数: <%= sex_ratio[:woman] %></p>
         </div>
       </div>
     </div>

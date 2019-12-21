@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'sinatra/base'
 require 'mysql2'
 require 'mysql2-cs-bind'
@@ -12,7 +14,7 @@ class Ishocon2::WebApp < Sinatra::Base
   session_secret = ENV['ISHOCON2_SESSION_SECRET'] || 'showwin_happy'
   use Rack::Session::Cookie, key: 'rack.session', secret: session_secret
   set :erb, escape_html: true
-  set :public_folder, File.expand_path('../public', __FILE__)
+  set :public_folder, File.expand_path('public', __dir__)
   set :protection, true
 
   helpers do
@@ -20,7 +22,7 @@ class Ishocon2::WebApp < Sinatra::Base
       @config ||= {
         db: {
           host: ENV['ISHOCON2_DB_HOST'] || 'localhost',
-          port: ENV['ISHOCON2_DB_PORT'] && ENV['ISHOCON2_DB_PORT'].to_i,
+          port: ENV['ISHOCON2_DB_PORT']&.to_i,
           username: ENV['ISHOCON2_DB_USER'] || 'ishocon',
           password: ENV['ISHOCON2_DB_PASSWORD'] || 'ishocon',
           database: ENV['ISHOCON2_DB_NAME'] || 'ishocon2'
@@ -30,6 +32,7 @@ class Ishocon2::WebApp < Sinatra::Base
 
     def db
       return Thread.current[:ishocon2_db] if Thread.current[:ishocon2_db]
+
       client = Mysql2::Client.new(
         host: config[:db][:host],
         port: config[:db][:port],
@@ -44,29 +47,111 @@ class Ishocon2::WebApp < Sinatra::Base
     end
 
     def election_results
-      query = <<SQL
-SELECT c.id, c.name, c.political_party, c.sex, v.count
-FROM candidates AS c
-LEFT OUTER JOIN
-  (SELECT candidate_id, COUNT(*) AS count
-  FROM votes
-  GROUP BY candidate_id) AS v
-ON c.id = v.candidate_id
-ORDER BY v.count DESC
-SQL
+      query = <<~SQL
+        SELECT c.id, c.name, c.political_party, c.sex, v.count
+        FROM candidates AS c
+        LEFT OUTER JOIN
+          (SELECT candidate_id, COUNT(*) AS count
+          FROM votes
+          GROUP BY candidate_id) AS v
+        ON c.id = v.candidate_id
+        ORDER BY v.count DESC
+      SQL
       db.xquery(query)
     end
 
+    # for top page
+    # TOP 10 の候補者を順に取り出す
+    def top_10_candidates
+      query = <<~SQL
+        SELECT c.id, c.name, c.political_party, c.sex, v.count
+        FROM candidates AS c
+        LEFT OUTER JOIN
+          (SELECT candidate_id, COUNT(*) AS count
+          FROM votes
+          GROUP BY candidate_id) AS v
+        ON c.id = v.candidate_id
+        ORDER BY v.count DESC
+        LIMIT 10
+      SQL
+
+      db.xquery(query)
+    end
+
+    # for top page
+    # TOP 10 の候補者を順に取り出す
+    def lowest_candidates
+      query = <<~SQL
+        SELECT c.name, c.political_party, v.count
+        FROM candidates AS c
+        LEFT OUTER JOIN
+          (SELECT candidate_id, COUNT(*) AS count
+          FROM votes
+          GROUP BY candidate_id) AS v
+        ON c.id = v.candidate_id
+        ORDER BY v.count asc
+        LIMIT 1
+      SQL
+
+      db.xquery(query)
+    end
+
+    # for top page
+    # 最下位 の候補者を順に取り出す
     def voice_of_supporter(candidate_ids)
-      query = <<SQL
-SELECT keyword
-FROM votes
-WHERE candidate_id IN (?)
-GROUP BY keyword
-ORDER BY COUNT(*) DESC
-LIMIT 10
-SQL
+      query = <<~SQL
+        SELECT keyword
+        FROM votes
+        WHERE candidate_id IN (?)
+        GROUP BY keyword
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+      SQL
       db.xquery(query, candidate_ids).map { |a| a[:keyword] }
+    end
+
+    # for top page
+    # 政党ごとの得票数をだす
+    def political_party_ranking
+      query = <<~SQL
+        select
+          candidates.political_party as political_party,
+          count(candidates.id) as vote_count
+
+        from candidates
+        join votes on candidates.id = votes.candidate_id
+        group by candidates.political_party
+        order by vote_count desc
+      SQL
+
+      db.xquery(query)
+    end
+
+    def total_votes_political_party(name)
+      query = <<~SQL
+        SELECT c.political_party, COUNT(*) AS count
+        FROM votes v
+        LEFT JOIN candidates c ON v.candidate_id = c.id
+        WHERE c.political_party = ?
+        GROUP BY c.political_party
+      SQL
+      db.xquery(query, name)
+    end
+
+    # for top page
+    # 男性票数
+    def sex_ranking
+      query = <<~SQL
+        select
+        candidates.sex,
+        count(candidates.id) as vote_count
+
+        from candidates
+        join votes on candidates.id = votes.candidate_id
+        group by candidates.sex
+      SQL
+
+      db.xquery(query)
     end
 
     def db_initialize
@@ -74,45 +159,27 @@ SQL
     end
   end
 
-  def total_votes_political_party(name)
-    query = <<SQL
-SELECT c.political_party, COUNT(*) AS count
-FROM votes v
-LEFT JOIN candidates c ON v.candidate_id = c.id
-WHERE c.political_party = ?
-GROUP BY c.political_party
-SQL
-  db.xquery(query, name)
-  end
-
-
   get '/' do
-    candidates = []
-    election_results.each_with_index do |r, i|
-      # 上位10人と最下位のみ表示
-      candidates.push(r) if i < 10 || 28 < i
+    sex_ratio = { man: 0, woman: 0 }
+    sex_ranking.each do |res|
+      case res[:sex]
+      when '男'
+        sex_ratio[:man] = res[:vote_count]
+      when '女'
+        sex_ratio[:woman] = res[:vote_count]
+      end
     end
 
-    parties_set = db.query('SELECT political_party FROM candidates GROUP BY political_party')
-    parties = {}
-    parties_set.each { |a| parties[a[:political_party]] = 0 }
-    election_results.each do |r|
-      parties[r[:political_party]] += r[:count] || 0
-    end
-
-    sex_ratio = { '男': 0, '女': 0 }
-    election_results.each do |r|
-      sex_ratio[r[:sex].to_sym] += r[:count] || 0
-    end
-
-    erb :index, locals: { candidates: candidates,
-                          parties: parties,
+    erb :index, locals: { candidates: [top_10_candidates.to_a,
+                                       lowest_candidates.to_a].flatten,
+                          parties: political_party_ranking,
                           sex_ratio: sex_ratio }
   end
 
   get '/candidates/:id' do
     candidate = db.xquery('SELECT * FROM candidates WHERE id = ?', params[:id]).first
     return redirect '/' if candidate.nil?
+
     votes = db.xquery('SELECT COUNT(*) AS count FROM votes WHERE candidate_id = ?', params[:id]).first[:count]
     keywords = voice_of_supporter([params[:id]])
     erb :candidate, locals: { candidate: candidate,
@@ -160,9 +227,9 @@ SQL
 
     params[:vote_count].to_i.times do
       result = db.xquery('INSERT INTO votes (user_id, candidate_id, keyword) VALUES (?, ?, ?)',
-                user[:id],
-                candidate[:id],
-                params[:keyword])
+                         user[:id],
+                         candidate[:id],
+                         params[:keyword])
     end
     return erb :vote, locals: { candidates: candidates, message: '投票に成功しました' }
   end
