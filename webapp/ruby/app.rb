@@ -204,10 +204,7 @@ class Ishocon2::WebApp < Sinatra::Base
   end
 
   post '/vote' do
-    user = db.xquery('SELECT * FROM users WHERE name = ? AND address = ? AND mynumber = ? limit 1',
-                     params[:name],
-                     params[:address],
-                     params[:mynumber]).first
+    user = db.xquery('SELECT * FROM users WHERE mynumber = ? limit 1', params[:mynumber]).first
     candidate = db.xquery('SELECT * FROM candidates WHERE name = ?', params[:candidate]).first
     voted_count =
       user.nil? ? 0 : db.xquery('SELECT COUNT(*) AS count FROM votes WHERE user_id = ? limit 1', user[:id]).first[:count]
