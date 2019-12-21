@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Vote Model
 type Vote struct {
@@ -22,9 +25,15 @@ func getUserVotedCount(userID int) (count int) {
 	return
 }
 
-func createVote(userID int, candidateID int, keyword string) {
-	db.Exec("INSERT INTO votes (user_id, candidate_id, keyword) VALUES (?, ?, ?)",
-		userID, candidateID, keyword)
+func createVote(userID int, candidateID int, keyword string, voteCount int) {
+	sql := "INSERT INTO votes (user_id, candidate_id, keyword) VALUES"
+	for i := 1; i <= voteCount; i++ {
+		sql = sql + "(" + strconv.Itoa(userID) + "," + strconv.Itoa(candidateID) + ", '" + keyword + "')"
+		if i != voteCount {
+			sql = sql + ", "
+		}
+	}
+	db.Exec(sql)
 }
 
 func getVoiceOfSupporter(candidateIDs []int) (voices []string) {

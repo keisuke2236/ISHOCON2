@@ -31,7 +31,7 @@ func main() {
 	db, _ = sql.Open("mysql", user+":"+pass+"@/"+dbname)
 	db.SetMaxIdleConns(5)
 
-	gin.SetMode(gin.DebugMode)
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	r.Use(static.Serve("/css", static.LocalFile("public/css", true)))
 	layout := "templates/layout.tmpl"
@@ -168,9 +168,7 @@ func main() {
 		} else if c.PostForm("keyword") == "" {
 			message = "投票理由を記入してください"
 		} else {
-			for i := 1; i <= voteCount; i++ {
-				createVote(user.ID, candidate.ID, c.PostForm("keyword"))
-			}
+			createVote(user.ID, candidate.ID, c.PostForm("keyword"), voteCount)
 			message = "投票に成功しました"
 		}
 		c.HTML(http.StatusOK, "base", gin.H{
