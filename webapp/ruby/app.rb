@@ -204,13 +204,13 @@ class Ishocon2::WebApp < Sinatra::Base
   end
 
   post '/vote' do
-    user = db.xquery('SELECT * FROM users WHERE name = ? AND address = ? AND mynumber = ?',
+    user = db.xquery('SELECT * FROM users WHERE name = ? AND address = ? AND mynumber = ? limit 1',
                      params[:name],
                      params[:address],
                      params[:mynumber]).first
     candidate = db.xquery('SELECT * FROM candidates WHERE name = ?', params[:candidate]).first
     voted_count =
-      user.nil? ? 0 : db.xquery('SELECT COUNT(*) AS count FROM votes WHERE user_id = ?', user[:id]).first[:count]
+      user.nil? ? 0 : db.xquery('SELECT COUNT(*) AS count FROM votes WHERE user_id = ? limit 1', user[:id]).first[:count]
 
     candidates = db.query('SELECT * FROM candidates')
     if user.nil?
@@ -225,12 +225,14 @@ class Ishocon2::WebApp < Sinatra::Base
       return erb :vote, locals: { candidates: candidates, message: '投票理由を記入してください' }
     end
 
+    query = 'INSERT INTO votes (user_id, candidate_id, keyword) VALUES '
+    array = []
     params[:vote_count].to_i.times do
-      result = db.xquery('INSERT INTO votes (user_id, candidate_id, keyword) VALUES (?, ?, ?)',
-                         user[:id],
-                         candidate[:id],
-                         params[:keyword])
+      array.push("(#{user[:id]}, #{candidate[:id]}, '#{params[:keyword]}')")
     end
+    query += array.join(',')
+    result = db.query(query)
+
     return erb :vote, locals: { candidates: candidates, message: '投票に成功しました' }
   end
 
