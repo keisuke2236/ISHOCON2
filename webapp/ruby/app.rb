@@ -177,7 +177,7 @@ class Ishocon2::WebApp < Sinatra::Base
   end
 
   get '/candidates/:id' do
-    candidate = db.xquery('SELECT * FROM candidates WHERE id = ?', params[:id]).first
+    candidate = db.xquery('SELECT * FROM candidates WHERE id = ? limit 1', params[:id]).first
     return redirect '/' if candidate.nil?
 
     votes = db.xquery('SELECT COUNT(*) AS count FROM votes WHERE candidate_id = ?', params[:id]).first[:count]
@@ -208,7 +208,7 @@ class Ishocon2::WebApp < Sinatra::Base
                      params[:name],
                      params[:address],
                      params[:mynumber]).first
-    candidate = db.xquery('SELECT * FROM candidates WHERE name = ?', params[:candidate]).first
+    candidate = db.xquery('SELECT * FROM candidates WHERE name = ? limit 1', params[:candidate]).first
     voted_count =
       user.nil? ? 0 : db.xquery('SELECT COUNT(*) AS count FROM votes WHERE user_id = ? limit 1', user[:id]).first[:count]
 
