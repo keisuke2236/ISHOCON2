@@ -76,6 +76,18 @@ SQL
     end
   end
 
+  def total_votes_political_party(name)
+    query = <<SQL
+SELECT c.political_party, COUNT(*) AS count
+FROM votes v
+LEFT JOIN candidates c ON v.candidate_id = c.id
+WHERE c.political_party = ?
+GROUP BY c.political_party
+SQL
+  db.xquery(query, name)
+  end
+
+
   get '/' do
     candidates = []
     election_results.each_with_index do |r, i|
@@ -111,10 +123,7 @@ SQL
   end
 
   get '/political_parties/:name' do
-    votes = 0
-    election_results.each do |r|
-      votes += r[:count] || 0 if r[:political_party] == params[:name]
-    end
+    votes = total_votes_political_party(params[:name]).first[:count]
     candidates = db.xquery('SELECT * FROM candidates WHERE political_party = ?', params[:name])
     candidate_ids = candidates.map { |c| c[:id] }
     keywords = voice_of_supporter(candidate_ids)
